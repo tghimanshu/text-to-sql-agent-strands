@@ -1,18 +1,29 @@
 import sqlite3
+import os
 
 
-def combine_sqlite_databases(source_db_path, target_db_path):
+def combine_sqlite_databases(source_db_path: str, target_db_path: str) -> None:
     """
     Combines data from a source SQLite database into a target SQLite database.
+
     Tables and their data from the source will be added to the target.
     Existing tables in the target with the same name will be appended to,
-    with potential handling for primary key conflicts.
+    with potential handling for primary key conflicts (using INSERT OR REPLACE).
+
+    Args:
+        source_db_path (str): The file path to the source SQLite database.
+        target_db_path (str): The file path to the target SQLite database.
+
+    Returns:
+        None
     """
+    source_conn = None
+    target_conn = None
     try:
-        source_conn = sqlite3.connect("weather_data.sqlite")
+        source_conn = sqlite3.connect(source_db_path)
         source_cursor = source_conn.cursor()
 
-        target_conn = sqlite3.connect("time_series.sqlite")
+        target_conn = sqlite3.connect(target_db_path)
         target_cursor = target_conn.cursor()
 
         # Get all table names from the source database
@@ -60,21 +71,40 @@ def combine_sqlite_databases(source_db_path, target_db_path):
             target_conn.close()
 
 
-# combine_sqlite_databases('db2.db', 'db1.db')
+if __name__ == "__main__":
+    # Example usage and verification
+    # Note: These files must exist for the code to run successfully.
+    source_db = "weather_data.sqlite"
+    target_db = "time_series.sqlite"
 
-# Verify the combined database
-conn_combined = sqlite3.connect("time_series.sqlite")
-cursor_combined = conn_combined.cursor()
-cursor_combined.execute("SELECT name from sqlite_master;")
-print("\nAll Tabless  in the DB:")
-for row in cursor_combined.fetchall():
-    print(row)
+    # Check if files exist before running to avoid immediate error if this is just a test run
+    if os.path.exists(source_db):
+        combine_sqlite_databases(source_db, target_db)
 
-cursor_combined.execute("SELECT * FROM weather_data limit 1;")
-print("\nProducts in combined DB:")
-# get column names
-column_names = [description[0] for description in cursor_combined.description]
-print(column_names)
-for row in cursor_combined.fetchall():
-    print(row)
-conn_combined.close()
+        # Verify the combined database
+        try:
+            conn_combined = sqlite3.connect(target_db)
+            cursor_combined = conn_combined.cursor()
+            cursor_combined.execute("SELECT name from sqlite_master;")
+            print("\nAll Tables in the DB:")
+            for row in cursor_combined.fetchall():
+                print(row)
+
+            # Check for weather_data table specifically as in original code
+            cursor_combined.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='weather_data';")
+            if cursor_combined.fetchone():
+                cursor_combined.execute("SELECT * FROM weather_data limit 1;")
+                print("\nProducts in combined DB:")
+                # get column names
+                column_names = [description[0] for description in cursor_combined.description]
+                print(column_names)
+                for row in cursor_combined.fetchall():
+                    print(row)
+            else:
+                 print("\n'weather_data' table not found in target database.")
+
+            conn_combined.close()
+        except sqlite3.Error as e:
+            print(f"Verification error: {e}")
+    else:
+        print(f"Source database '{source_db}' not found. Skipping execution.")
